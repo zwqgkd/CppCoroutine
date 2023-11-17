@@ -31,7 +31,7 @@ struct Generator {
             return {};
         }
 
-        //co_await
+        //co_return调用的函数 return_void, return_value
         void return_void() {}
     };
 
@@ -39,20 +39,67 @@ struct Generator {
 
     explicit Generator(std::coroutine_handle<promise_type> handle) noexcept
         : handle(handle) {}
+
+    //不允许拷贝，防止handle空悬
+    Generator(const Generator&) = delete;
+
+    Generator& operator=(const Generator&) = delete;
+
+    Generator(Generator&& other)noexcept :handle(std::exchange(other.handle, {})) {}
+
+    ~Generator() {
+        if (handle) handle.destroy();
+    }
+
+    bool has_next() {
+        if (handle.done()) {
+            return false;
+        }
+
+        if (!handle.promise().is_ready) {
+            //让序列继续执行
+            handle.resume();
+        }
+        //序列执行完毕或者再次挂起之后回到这里
+        if (handle.done()) {
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+
+    int next() {
+        if (has_next()) {
+            handle.promise().is_ready = false;
+            return handle.promise().value;
+        }
+        throw ExhaustedException{};
+    }
 };
 
-Generator sequence() {
-    int i = 0;
-    while (i < 5) {
-        co_yield i++;
+Generator fibonacci() {
+    co_yield 0;
+    co_yield 1;
+    
+    int a = 0;
+    int b = 1;
+    while (true) {
+        co_yield a + b;
+        b = a + b;
+        a = b - a;
     }
 }
 
-Generator returns_generator() {
-    auto g = sequence();
-    if (g.)
-}
-
 int main() {
-    auto generator
+    auto generator = fibonacci();
+    for (int i = 0; i < 10; i++) {
+        if (generator.has_next()) {
+            std::cout << generator.next() << std::endl;
+        }
+        else {
+            break;
+        }
+    }
+    return 0;
 }
